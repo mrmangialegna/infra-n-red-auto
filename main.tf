@@ -1,6 +1,6 @@
 terraform {
   required_version = ">= 1.0"
-  
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -12,6 +12,12 @@ terraform {
 # Provider Configuration
 provider "aws" {
   region = var.region
+}
+
+# Provider for backup region
+provider "aws" {
+  alias  = "backup_region"
+  region = "us-west-2"
 }
 
 # Data sources
@@ -32,7 +38,7 @@ data "aws_availability_zones" "available" {
 # Local values
 locals {
   name_prefix = "${var.project_name}-${var.environment}"
-  
+
   common_tags = merge(var.default_tags, {
     Project     = var.project_name
     Environment = var.environment

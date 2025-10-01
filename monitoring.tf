@@ -49,7 +49,7 @@ resource "aws_cloudwatch_metric_alarm" "rds_cpu_high" {
   alarm_description   = "Alarm if RDS CPU > ${var.cpu_alarm_threshold}%"
 
   dimensions = {
-    DBInstanceIdentifier = aws_db_instance.postgres.id
+    DBInstanceIdentifier = aws_rds_cluster.postgresql.cluster_identifier
   }
 
   alarm_actions = []
@@ -70,7 +70,7 @@ resource "aws_cloudwatch_metric_alarm" "redis_cpu_high" {
   alarm_description   = "Alarm if Redis CPU > ${var.cpu_alarm_threshold}%"
 
   dimensions = {
-    CacheClusterId = aws_elasticache_cluster.redis.id
+    ReplicationGroupId = aws_elasticache_replication_group.redis_cluster.replication_group_id
   }
 
   alarm_actions = []

@@ -3,242 +3,75 @@
 # -------------------------
 # VPC
 # -------------------------
-resource "aws_vpc" "paas_vpc" {
-  cidr_block           = var.vpc_cidr
+resource "aws_vpc" "main" {
+  cidr_block           = "10.0.0.0/16"
   enable_dns_support   = true
   enable_dns_hostnames = true
 
-  tags = {
-    Name = "paas-vpc"
-  }
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-vpc"
+  })
 }
 
 # -------------------------
 # Public Subnet (for ALB)
 # -------------------------
-resource "aws_subnet" "public_subnet_1" {
-  vpc_id                  = aws_vpc.paas_vpc.id
-  cidr_block              = var.public_subnet_cidr
-  availability_zone       = "${var.aws_region}a"
+resource "aws_subnet" "public" {
+  count                   = 2
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = "10.0.${count.index + 1}.0/24"
+  availability_zone       = data.aws_availability_zones.available.names[count.index]
   map_public_ip_on_launch = true
 
-  tags = {
-    Name = "paas-public-subnet-1"
-  }
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-public-subnet-${count.index + 1}"
+  })
 }
 
 # -------------------------
 # Private Subnets (for K8s nodes / pods)
 # -------------------------
-resource "aws_subnet" "private_subnet_1" {
-  vpc_id            = aws_vpc.paas_vpc.id
-  cidr_block        = var.private_subnet_cidr
-  availability_zone = "${var.aws_region}a"
+resource "aws_subnet" "private" {
+  count             = 2
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = "10.0.${count.index + 10}.0/24"
+  availability_zone = data.aws_availability_zones.available.names[count.index]
 
-  tags = {
-    Name = "paas-private-subnet-1"
-  }
-}
-
-resource "aws_subnet" "private_subnet_2" {
-  vpc_id            = aws_vpc.paas_vpc.id
-  cidr_block        = var.private_subnet_2_cidr
-  availability_zone = "${var.aws_region}b"
-
-  tags = {
-    Name = "paas-private-subnet-2"
-  }
-}
-
-resource "aws_subnet" "public_subnet_2" {
-  vpc_id                  = aws_vpc.paas_vpc.id
-  cidr_block              = "10.0.4.0/24"
-  availability_zone       = "${var.aws_region}b"
-  map_public_ip_on_launch = true
-
-  tags = {
-    Name = "paas-public-subnet-2"
-  }
-}
-
-resource "aws_subnet" "public_subnet_3" {
-  vpc_id                  = aws_vpc.paas_vpc.id
-  cidr_block              = "10.0.5.0/24"
-  availability_zone       = "${var.aws_region}c"
-  map_public_ip_on_launch = true
-
-  tags = {
-    Name = "paas-public-subnet-3"
-  }
-}
-
-resource "aws_subnet" "private_subnet_3" {
-  vpc_id            = aws_vpc.paas_vpc.id
-  cidr_block        = "10.0.6.0/24"
-  availability_zone = "${var.aws_region}c"
-
-  tags = {
-    Name = "paas-private-subnet-3"
-  }
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-private-subnet-${count.index + 1}"
+  })
 }
 
 # -------------------------
 # Internet Gateway
 # -------------------------
-resource "aws_internet_gateway" "igw" {
-  vpc_id = aws_vpc.paas_vpc.id
+resource "aws_internet_gateway" "main" {
+  vpc_id = aws_vpc.main.id
 
-  tags = {
-    Name = "paas-igw"
-  }
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-igw"
+  })
 }
 
 # -------------------------
 # Route Table for Public Subnet
 # -------------------------
-resource "aws_route_table" "public_rt" {
-  vpc_id = aws_vpc.paas_vpc.id
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.main.id
 
   route {
     cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.igw.id
+    gateway_id = aws_internet_gateway.main.id
   }
 
-  tags = {
-    Name = "paas-public-rt"
-  }
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-public-rt"
+  })
 }
 
-resource "aws_route_table_association" "public_rta" {
-  subnet_id      = aws_subnet.public_subnet_1.id
-  route_table_id = aws_route_table.public_rt.id
+resource "aws_route_table_association" "public" {
+  count          = length(aws_subnet.public)
+  subnet_id      = aws_subnet.public[count.index].id
+  route_table_id = aws_route_table.public.id
 }
 
-resource "aws_route_table_association" "public_rta_2" {
-  subnet_id      = aws_subnet.public_subnet_2.id
-  route_table_id = aws_route_table.public_rt.id
-}
-
-resource "aws_route_table_association" "public_rta_3" {
-  subnet_id      = aws_subnet.public_subnet_3.id
-  route_table_id = aws_route_table.public_rt.id
-}
-
-# -------------------------
-# Network ACLs for additional security
-# -------------------------
-resource "aws_network_acl" "private_nacl" {
-  vpc_id     = aws_vpc.paas_vpc.id
-  subnet_ids = [
-    aws_subnet.private_subnet_1.id,
-    aws_subnet.private_subnet_2.id,
-    aws_subnet.private_subnet_3.id
-  ]
-
-  # Allow internal VPC traffic
-  ingress {
-    protocol   = "-1"
-    rule_no    = 100
-    action     = "allow"
-    cidr_block = aws_vpc.paas_vpc.cidr_block
-  }
-
-  # Allow return traffic
-  ingress {
-    protocol   = "tcp"
-    rule_no    = 200
-    action     = "allow"
-    cidr_block = "0.0.0.0/0"
-    from_port  = 1024
-    to_port    = 65535
-  }
-
-  egress {
-    protocol   = "-1"
-    rule_no    = 100
-    action     = "allow"
-    cidr_block = "0.0.0.0/0"
-  }
-
-  tags = {
-    Name = "paas-private-nacl"
-  }
-}
-
-# -------------------------
-# Security Group for ALB
-# -------------------------
-resource "aws_security_group" "alb_sg" {
-  name        = "paas-alb-sg"
-  description = "Allow HTTP/HTTPS to ALB"
-  vpc_id      = aws_vpc.paas_vpc.id
-
-  ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name = "paas-alb-sg"
-  }
-}
-
-# -------------------------
-# Security Group for K8s nodes
-# -------------------------
-resource "aws_security_group" "k8s_sg" {
-  name        = "paas-k8s-sg"
-  description = "Allow traffic from ALB and internal cluster"
-  vpc_id      = aws_vpc.paas_vpc.id
-
-  # SSH access
-  ingress {
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = [aws_vpc.paas_vpc.cidr_block]
-  }
-
-  # Allow all traffic from ALB
-  ingress {
-    from_port       = 0
-    to_port         = 0
-    protocol        = "-1"
-    security_groups = [aws_security_group.alb_sg.id]
-  }
-
-  # Allow internal cluster communication
-  ingress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = [aws_vpc.paas_vpc.cidr_block]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name = "paas-k8s-sg"
-  }
-}

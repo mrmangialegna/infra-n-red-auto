@@ -42,3 +42,27 @@ variable "default_tags" {
     ManagedBy   = "terraform"
   }
 }
+
+variable "s3_code_bucket_name" {
+  description = "Name for the S3 bucket for user code uploads"
+  type        = string
+  default     = ""
+}
+
+variable "cpu_alarm_threshold" {
+  description = "CPU threshold for CloudWatch alarms"
+  type        = number
+  default     = 80
+}
+
+variable "memory_alarm_threshold" {
+  description = "Memory threshold for CloudWatch alarms"
+  type        = number
+  default     = 85
+}
+
+variable "redis_node_type" {
+  description = "ElastiCache Redis node type"
+  type        = string
+  default     = "cache.t3.micro"
+}

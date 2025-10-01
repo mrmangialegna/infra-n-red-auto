@@ -5,9 +5,9 @@
 # -------------------------
 resource "aws_cloudfront_distribution" "paas_cdn" {
   origin {
-    domain_name = aws_lb.paas_alb.dns_name
+    domain_name = aws_lb.main.dns_name
     origin_id   = "paas-alb-origin"
-    
+
     custom_origin_config {
       http_port              = 80
       https_port             = 443
@@ -32,7 +32,7 @@ resource "aws_cloudfront_distribution" "paas_cdn" {
     forwarded_values {
       query_string = true
       headers      = ["Host", "Authorization", "CloudFront-Forwarded-Proto"]
-      
+
       cookies {
         forward = "all"
       }
@@ -76,7 +76,7 @@ resource "aws_cloudfront_distribution" "paas_cdn" {
     forwarded_values {
       query_string = true
       headers      = ["*"]
-      
+
       cookies {
         forward = "all"
       }
@@ -96,14 +96,14 @@ resource "aws_cloudfront_distribution" "paas_cdn" {
   }
 
   viewer_certificate {
-    acm_certificate_arn      = aws_acm_certificate.paas_cert.arn
+    acm_certificate_arn      = aws_acm_certificate.ssl.arn
     ssl_support_method       = "sni-only"
     minimum_protocol_version = "TLSv1.2_2021"
   }
 
-  tags = {
-    Name = "paas-cloudfront"
-  }
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-cloudfront"
+  })
 }
 
 # -------------------------

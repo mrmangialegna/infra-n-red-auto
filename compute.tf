@@ -5,7 +5,7 @@ resource "aws_lb" "main" {
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
-  subnets           = aws_subnet.public[*].id
+  subnets            = aws_subnet.public[*].id
 
   enable_deletion_protection = false
 
@@ -16,10 +16,10 @@ resource "aws_lb" "main" {
 
 # Target Group for Applications
 resource "aws_lb_target_group" "app" {
-  name     = "${local.name_prefix}-app-tg"
-  port     = 80
-  protocol = "HTTP"
-  vpc_id   = aws_vpc.main.id
+  name        = "${local.name_prefix}-app-tg"
+  port        = 80
+  protocol    = "HTTP"
+  vpc_id      = aws_vpc.main.id
   target_type = "ip"
 
   health_check {
@@ -71,9 +71,9 @@ resource "aws_lb_listener" "http" {
 
 # ACM Certificate for SSL
 resource "aws_acm_certificate" "ssl" {
-  domain_name       = var.domain_name
+  domain_name               = var.domain_name
   subject_alternative_names = ["*.${var.domain_name}"]
-  validation_method = "DNS"
+  validation_method         = "DNS"
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-ssl-cert"
@@ -115,21 +115,21 @@ resource "aws_ecs_task_definition" "app" {
     {
       name  = "app"
       image = "${aws_ecr_repository.app.repository_url}:latest"
-      
+
       portMappings = [
         {
           containerPort = 80
           protocol      = "tcp"
         }
       ]
-      
+
       environment = [
         {
           name  = "DATABASE_URL"
           value = "postgresql://${var.db_username}:${var.db_password}@${aws_rds_cluster.postgresql.endpoint}:5432/${aws_rds_cluster.postgresql.database_name}"
         }
       ]
-      
+
       logConfiguration = {
         logDriver = "awslogs"
         options = {

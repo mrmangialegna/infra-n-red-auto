@@ -124,12 +124,12 @@ resource "aws_s3_bucket_acl" "code_bucket_acl" {
 # S3 VPC Endpoint for private access
 # -------------------------
 resource "aws_vpc_endpoint" "s3" {
-  vpc_id       = aws_vpc.paas_vpc.id
-  service_name = "com.amazonaws.${var.aws_region}.s3"
-  
-  tags = {
-    Name = "paas-s3-endpoint"
-  }
+  vpc_id       = aws_vpc.main.id
+  service_name = "com.amazonaws.${var.region}.s3"
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-s3-endpoint"
+  })
 }
 
 # -------------------------
@@ -137,41 +137,44 @@ resource "aws_vpc_endpoint" "s3" {
 # -------------------------
 resource "aws_db_subnet_group" "rds_subnet_group" {
   name       = "paas-rds-subnet-group"
-  subnet_ids = [
-    aws_subnet.private_subnet_1.id, 
-    aws_subnet.private_subnet_2.id,
-    aws_subnet.private_subnet_3.id
-  ]
+  subnet_ids = aws_subnet.private[*].id
 
-  tags = {
-    Name = "paas-rds-subnet-group"
-  }
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-rds-subnet-group"
+  })
 }
 
-resource "aws_db_instance" "postgres" {
-  identifier             = "paas-postgres"
-  engine                 = "postgres"
-  engine_version         = var.rds_engine_version
-  instance_class         = var.rds_instance_class
-  allocated_storage      = var.rds_allocated_storage
-  max_allocated_storage  = 100
-  db_name                = "paasdb"
-  username               = var.rds_username
-  password               = var.rds_password
-  multi_az               = true
-  storage_type           = "gp3"
-  publicly_accessible    = false
-  db_subnet_group_name   = aws_db_subnet_group.rds_subnet_group.name
-  vpc_security_group_ids = [aws_security_group.k8s_sg.id]
+# Aurora Serverless v2 Cluster
+resource "aws_rds_cluster" "postgresql" {
+  cluster_identifier           = "paas-postgres-cluster"
+  engine                       = "aurora-postgresql"
+  engine_version               = "15.4"
+  database_name                = "paasdb"
+  master_username              = var.db_username
+  master_password              = var.db_password
+  backup_retention_period      = 7
+  preferred_backup_window      = "03:00-04:00"
+  preferred_maintenance_window = "sun:04:00-sun:05:00"
+  db_subnet_group_name         = aws_db_subnet_group.rds_subnet_group.name
+  vpc_security_group_ids       = [aws_security_group.ecs_tasks.id]
+  skip_final_snapshot          = true
+  storage_encrypted            = true
 
-  # Enable automated backups
-  backup_retention_period = 7
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-postgres-cluster"
+  })
+}
 
-  tags = {
-    Name = "paas-postgres-unified"
-  }
+# Aurora Serverless v2 Instance
+resource "aws_rds_cluster_instance" "postgresql" {
+  cluster_identifier = aws_rds_cluster.postgresql.id
+  instance_class     = "db.serverless"
+  engine             = aws_rds_cluster.postgresql.engine
+  engine_version     = aws_rds_cluster.postgresql.engine_version
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-postgres-instance"
+  })
 }
 
 # -------------------------
@@ -179,31 +182,28 @@ resource "aws_db_instance" "postgres" {
 # -------------------------
 resource "aws_elasticache_subnet_group" "redis_subnet_group" {
   name       = "paas-redis-subnet-group"
-  subnet_ids = [
-    aws_subnet.private_subnet_1.id,
-    aws_subnet.private_subnet_2.id
-  ]
+  subnet_ids = aws_subnet.private[*].id
 
-  tags = {
-    Name = "paas-redis-subnet-group"
-  }
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-redis-subnet-group"
+  })
 }
 
 resource "aws_elasticache_replication_group" "redis_cluster" {
-  replication_group_id         = "paas-redis-cluster"
-  description                  = "Redis cluster for PaaS"
-  node_type                    = var.redis_node_type
-  port                         = 6379
-  parameter_group_name         = "default.redis7"
-  num_cache_clusters           = 2
-  automatic_failover_enabled   = true
-  multi_az_enabled            = true
-  subnet_group_name           = aws_elasticache_subnet_group.redis_subnet_group.name
-  security_group_ids          = [aws_security_group.k8s_sg.id]
+  replication_group_id       = "paas-redis-cluster"
+  description                = "Redis cluster for PaaS"
+  node_type                  = var.redis_node_type
+  port                       = 6379
+  parameter_group_name       = "default.redis7"
+  num_cache_clusters         = 2
+  automatic_failover_enabled = true
+  multi_az_enabled           = true
+  subnet_group_name          = aws_elasticache_subnet_group.redis_subnet_group.name
+  security_group_ids         = [aws_security_group.ecs_tasks.id]
 
-  tags = {
-    Name = "paas-redis-cluster"
-  }
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-redis-cluster"
+  })
 }
 
 # -------------------------
@@ -212,33 +212,28 @@ resource "aws_elasticache_replication_group" "redis_cluster" {
 resource "aws_secretsmanager_secret" "app_secrets" {
   name        = "paas-app-secrets"
   description = "Secrets for PaaS applications"
-  
-  # Enable automatic rotation
-  rotation_rules {
-    automatically_after_days = 30
-  }
 
-  tags = {
-    Name = "paas-app-secrets"
-  }
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-app-secrets"
+  })
 }
 
 resource "aws_secretsmanager_secret_version" "app_secrets_version" {
-  secret_id     = aws_secretsmanager_secret.app_secrets.id
+  secret_id = aws_secretsmanager_secret.app_secrets.id
   secret_string = jsonencode({
-    DATABASE_PASSWORD = var.rds_password
-    API_KEY          = "SuperSecretKey"
+    DATABASE_PASSWORD = var.db_password
+    API_KEY           = "SuperSecretKey"
   })
 }
 
 # Lambda for secrets rotation
 resource "aws_lambda_function" "secrets_rotation" {
-  filename         = "secrets_rotation.zip"
-  function_name    = "paas-secrets-rotation"
-  role            = aws_iam_role.secrets_rotation_role.arn
-  handler         = "index.handler"
-  runtime         = "python3.9"
-  timeout         = 30
+  filename      = "secrets_rotation.zip"
+  function_name = "paas-secrets-rotation"
+  role          = aws_iam_role.secrets_rotation_role.arn
+  handler       = "index.handler"
+  runtime       = "python3.9"
+  timeout       = 30
 
   tags = {
     Name = "paas-secrets-rotation"
