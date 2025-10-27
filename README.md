@@ -1,4 +1,4 @@
-PaaS Infrastructure – Enterprise Deployment
+PaaS Infrastructure – Advanced Deployment
 
 Enterprise-grade Platform-as-a-Service (PaaS) infrastructure with ECS Fargate + Aurora Serverless.
 
