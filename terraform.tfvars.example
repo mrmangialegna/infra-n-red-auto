@@ -1,4 +1,4 @@
-# Enterprise Plan Configuration Example
+# Advanced Deployment Configuration Example
 # Copy this file to terraform.tfvars and customize
 
 # AWS Configuration
