@@ -14,13 +14,15 @@ resource "aws_lb" "main" {
   })
 }
 
-# Target Group for Applications
+# Target Group for Applications (dynamic - created per tenant/app)
+# This will be managed by Lambda on deployment
 resource "aws_lb_target_group" "app" {
-  name        = "${local.name_prefix}-app-tg"
+  name        = "${local.name_prefix}-default-tg"
   port        = 80
   protocol    = "HTTP"
   vpc_id      = aws_vpc.main.id
   target_type = "ip"
+  deregistration_delay = 30
 
   health_check {
     enabled             = true
@@ -35,7 +37,36 @@ resource "aws_lb_target_group" "app" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-app-tg"
+    Name = "${local.name_prefix}-default-tg"
+  })
+}
+
+# Placeholder listener rule for multi-tenant routing
+# The Lambda webhook handler will create dynamic listener rules
+# based on app_name from webhook payload
+resource "aws_lb_listener_rule" "app_routing" {
+  listener_arn = aws_lb_listener.https.arn
+  priority     = 100
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.app.arn
+  }
+
+  condition {
+    host_header {
+      values = ["*.${var.domain_name}"]
+    }
+  }
+
+  condition {
+    path_pattern {
+      values = ["/*"]
+    }
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-dynamic-routing"
   })
 }
 

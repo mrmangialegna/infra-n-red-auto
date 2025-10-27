@@ -66,3 +66,10 @@ variable "redis_node_type" {
   type        = string
   default     = "cache.t3.micro"
 }
+
+variable "github_webhook_secret" {
+  description = "GitHub webhook secret for security (optional but recommended)"
+  type        = string
+  default     = ""
+  sensitive   = true
+}

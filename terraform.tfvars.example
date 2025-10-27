@@ -23,3 +23,6 @@ memory_alarm_threshold = 85
 # Redis Configuration
 redis_node_type = "cache.t3.micro"
 
+# Security Configuration
+github_webhook_secret = "your-github-webhook-secret-here"
+

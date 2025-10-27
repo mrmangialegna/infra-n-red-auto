@@ -26,7 +26,53 @@ resource "aws_api_gateway_method" "webhook_post" {
   rest_api_id   = aws_api_gateway_rest_api.git_webhooks.id
   resource_id   = aws_api_gateway_resource.app_webhook.id
   http_method   = "POST"
+  authorization = "AWS_IAM"  # Require AWS IAM authentication
+}
+
+resource "aws_api_gateway_method" "webhook_options" {
+  rest_api_id   = aws_api_gateway_rest_api.git_webhooks.id
+  resource_id   = aws_api_gateway_resource.app_webhook.id
+  http_method   = "OPTIONS"
   authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "webhook_options" {
+  rest_api_id = aws_api_gateway_rest_api.git_webhooks.id
+  resource_id = aws_api_gateway_resource.app_webhook.id
+  http_method = aws_api_gateway_method.webhook_options.http_method
+  type        = "MOCK"
+  
+  request_templates = {
+    "application/json" = "{\"statusCode\": 200}"
+  }
+}
+
+resource "aws_api_gateway_method_response" "webhook_options" {
+  rest_api_id = aws_api_gateway_rest_api.git_webhooks.id
+  resource_id = aws_api_gateway_resource.app_webhook.id
+  http_method = aws_api_gateway_method.webhook_options.http_method
+  status_code = "200"
+
+  response_headers = {
+    "Access-Control-Allow-Origin"  = "'*'"
+    "Access-Control-Allow-Methods" = "'POST,OPTIONS'"
+    "Access-Control-Allow-Headers" = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+  }
+}
+
+resource "aws_api_gateway_integration_response" "webhook_options" {
+  rest_api_id = aws_api_gateway_rest_api.git_webhooks.id
+  resource_id = aws_api_gateway_resource.app_webhook.id
+  http_method = aws_api_gateway_method.webhook_options.http_method
+  status_code = aws_api_gateway_method_response.webhook_options.status_code
+
+  response_headers = {
+    "Access-Control-Allow-Origin"  = "'*'"
+    "Access-Control-Allow-Methods" = "'POST,OPTIONS'"
+    "Access-Control-Allow-Headers" = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+  }
+
+  depends_on = [aws_api_gateway_integration.webhook_options]
 }
 
 resource "aws_api_gateway_integration" "webhook_lambda" {
@@ -95,6 +141,28 @@ resource "aws_iam_role_policy" "webhook_lambda_policy" {
           "states:StartExecution"
         ]
         Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "elbv2:CreateTargetGroup",
+          "elbv2:DeleteTargetGroup",
+          "elbv2:DescribeTargetGroups",
+          "elbv2:RegisterTargets",
+          "elbv2:DeregisterTargets",
+          "elbv2:ModifyTargetGroup",
+          "elbv2:CreateRule",
+          "elbv2:DeleteRule",
+          "elbv2:DescribeRules",
+          "elbv2:ModifyRule",
+          "elbv2:DescribeListeners",
+          "ecs:CreateService",
+          "ecs:DescribeServices",
+          "ecs:UpdateService",
+          "ecs:RegisterTaskDefinition",
+          "ecs:DescribeTaskDefinition"
+        ]
+        Resource = "*"
       }
     ]
   })
@@ -126,6 +194,12 @@ resource "aws_lambda_function" "git_webhook_handler" {
       POSTGRES_USER       = var.db_username
       POSTGRES_PASS       = var.db_password
       STEP_FUNCTION_ARN   = aws_sfn_state_machine.build_state_machine.arn
+      ECS_CLUSTER_NAME    = aws_ecs_cluster.main.name
+      ALB_ARN             = aws_lb.main.arn
+      LISTENER_ARN        = aws_lb_listener.https.arn
+      VPC_ID              = aws_vpc.main.id
+      DOMAIN_NAME         = var.domain_name
+      GITHUB_WEBHOOK_SECRET = var.github_webhook_secret
     }
   }
 }
