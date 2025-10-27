@@ -1,27 +1,43 @@
-# PaaS Infrastructure – Enterprise Deployment
+PaaS Infrastructure – Enterprise Deployment
 
-Enterprise-grade Platform-as-a-Service (PaaS) infrastructure with ECS Fargate + Aurora Serverless, for a Heroku-like clone.
+Enterprise-grade Platform-as-a-Service (PaaS) infrastructure with ECS Fargate + Aurora Serverless.
 
-## Architecture
+-----------------------------------------------------
+Architecture
 
-- **Compute**: ECS Fargate with auto-scaling containers (serverless)
-- **Load Balancer**: Application Load Balancer with HTTPS/SSL
-- **Database**: Aurora Serverless v2 PostgreSQL with automatic scaling
-- **Cache**: ElastiCache Redis cluster with Multi-AZ
-- **Storage**: S3 with versioning and cross-region replication
-- **CDN**: CloudFront distribution for global content delivery
-- **Monitoring**: CloudWatch with custom metrics and alarms
-- **Networking**: VPC with multi-AZ deployment + security groups
-- **Secrets**: AWS Secrets Manager with automatic rotation
+- Compute: ECS Fargate with auto-scaling containers (serverless)
+- Load Balancer: Application Load Balancer with HTTPS/SSL
+- Database: Aurora Serverless v2 PostgreSQL with automatic scaling
+- Cache: ElastiCache Redis cluster with Multi-AZ
+- Storage: S3 with versioning and cross-region replication
+- CDN: CloudFront distribution for global content delivery
+- Monitoring: CloudWatch with custom metrics and alarms
+- Networking: VPC with multi-AZ deployment + security groups
+- Secrets: AWS Secrets Manager with automatic rotation
 
-## Prerequisites
+Prerequisites
 
 1. AWS CLI configured
 2. Terraform >= 1.0
 3. Domain name for SSL certificate
 4. AWS Route 53 hosted zone (optional)
+5. Existing EC2 key pair
 
-## Deployment
+-----------------------------------------------------
+Pre-deployment Steps
+
+Before applying Terraform, create the Lambda zip file:
+
+```bash
+# Install dependencies
+pip install -r requirements.txt -t .
+
+# Create webhook handler zip (includes dependencies)
+zip -r webhook_handler.zip webhook_handler.py index.py boto3 psycopg2_binary-*.dist-info urllib3
+```
+
+-----------------------------------------------------
+Deployment
 
 1. Configure variables:
    ```bash
@@ -51,22 +67,24 @@ Enterprise-grade Platform-as-a-Service (PaaS) infrastructure with ECS Fargate + 
    region      = "us-east-1"
    ```
 
-## Main Variables
+-----------------------------------------------------
+Main Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| region | AWS region | us-east-1 |
-| project_name | Project name | heroku-clone-enterprise |
-| environment | Environment name | production |
-| domain_name | Domain name for application | **Required** |
-| db_username | Database username | paasadmin |
-| db_password | Database password | **Required** |
-| s3_code_bucket_name | S3 bucket name for user code | "" (auto-generated) |
-| cpu_alarm_threshold | CPU threshold for CloudWatch alarms | 80 |
-| memory_alarm_threshold | Memory threshold for CloudWatch alarms | 85 |
-| redis_node_type | ElastiCache Redis node type | cache.t3.micro |
+Variables
 
-## Output
+region us-east-1
+project_name Clone-enterprise |
+environment Production
+domain_name Required
+db_username paasadmin 
+db_password Required
+s3_code_bucket_name | S3 bucket name for user code | "" (auto-generated) |
+cpu_alarm_threshold | CPU threshold for CloudWatch alarms | 80 |
+memory_alarm_threshold | Memory threshold for CloudWatch alarms | 85 |
+redis_node_type, lastiCache Redis node type, cache.t3.micro |
+
+-----------------------------------------------------
+Output
 
 After deployment, you will get:
 - VPC and subnet IDs (public/private)
@@ -79,21 +97,48 @@ After deployment, you will get:
 - SSL certificate ARN
 - ECR repository URL
 
-## Cleanup
+-----------------------------------------------------
+Post-deployment Configuration
+
+1. Initialize Database Schema
+
+Connect to the Aurora Serverless cluster and run the init_db.sql script:
+
+```bash
+# Get RDS endpoint from terraform output
+RDS_ENDPOINT=$(terraform output -raw aurora_endpoint)
+
+# Connect and run init script
+psql -h $RDS_ENDPOINT -U paasadmin -d paasdb -f init_db.sql
+```
+
+2. Configure GitHub Webhook
+
+After deployment, get the API Gateway webhook URL from Terraform outputs:
+
+```bash
+WEBHOOK_URL=$(terraform output -raw webhook_url)
+```
+
+Configure this URL in your GitHub repository:
+1. Go to Settings → Webhooks
+2. Add webhook URL: `https://${WEBHOOK_URL}/webhook/{app_name}`
+3. Set content type to `application/json`
+4. Enable "Just the push event"
+
+3. Deploy Your First App
+
+1. Push code to your GitHub repository
+2. The webhook triggers the Lambda function
+3. Lambda downloads the code, uploads to S3
+4. Step Functions triggers CodeBuild
+5. CodeBuild builds Docker image and pushes to ECR
+6. CodeBuild deploys to ECS Fargate
+7. Your app is live!
+
+-----------------------------------------------------
+Cleanup
 
 ```bash
 terraform destroy
 ```
-
-## Notes
-
-- **ECS Fargate** provides serverless container orchestration with automatic scaling
-- **Aurora Serverless v2** automatically scales database capacity based on demand
-- **ElastiCache Redis** provides high-availability caching with Multi-AZ
-- **CloudFront** delivers content globally with edge locations
-- **S3** includes cross-region replication for disaster recovery
-- **CloudWatch** monitors all resources with custom alarms and metrics
-- **SSL certificates** are managed automatically via ACM
-- **Secrets Manager** handles sensitive data with automatic rotation
-
-*Costs may vary based on usage and region*

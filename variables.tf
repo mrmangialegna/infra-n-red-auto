@@ -7,7 +7,7 @@ variable "region" {
 variable "project_name" {
   description = "Name of the project"
   type        = string
-  default     = "heroku-clone-enterprise"
+  default     = "clone-enterprise"
 }
 
 variable "environment" {
@@ -37,7 +37,7 @@ variable "default_tags" {
   description = "Default tags to apply to all resources"
   type        = map(string)
   default = {
-    Project     = "HerokuClone-Enterprise"
+    Project     = "Clone-Enterprise"
     Environment = "production"
     ManagedBy   = "terraform"
   }

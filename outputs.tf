@@ -137,3 +137,16 @@ output "cloudfront_hosted_zone_id" {
   value       = aws_cloudfront_distribution.paas_cdn.hosted_zone_id
 }
 
+# -------------------------
+# Git Integration Webhook
+# -------------------------
+output "webhook_url" {
+  description = "Webhook URL for Git integration"
+  value       = "${aws_api_gateway_rest_api.git_webhooks.execution_arn}/prod/webhook/{app_name}"
+}
+
+output "aurora_endpoint" {
+  description = "Aurora Serverless endpoint"
+  value       = aws_rds_cluster.postgresql.endpoint
+}
+

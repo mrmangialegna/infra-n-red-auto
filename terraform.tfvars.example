@@ -1,0 +1,25 @@
+# Enterprise Plan Configuration Example
+# Copy this file to terraform.tfvars and customize
+
+# AWS Configuration
+region = "us-east-1"
+project_name = "clone-enterprise"
+environment = "production"
+
+# Domain Configuration (required)
+domain_name = "yourdomain.com"
+
+# Database Configuration
+db_username = "paasadmin"
+db_password = "ChangeThisSecurePassword123!"
+
+# S3 Configuration (leave empty for auto-generation)
+s3_code_bucket_name = ""
+
+# Monitoring Thresholds
+cpu_alarm_threshold = 80
+memory_alarm_threshold = 85
+
+# Redis Configuration
+redis_node_type = "cache.t3.micro"
+
